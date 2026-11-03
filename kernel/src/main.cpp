@@ -108,7 +108,7 @@ void fb_pattern(limine_framebuffer *fb) {
         for (std::size_t x = 0; x < fb->width; x++) {
             std::uint8_t nX = x * 255 / fb->width;
             std::uint8_t nY = y * 255 / fb->height;
-            fb_ptr[y * (fb->pitch / 4) + x] = fb_pixel(fb, 0, nY, nX);
+            fb_ptr[y * (fb->pitch / 4) + x] = fb_pixel(fb, nY, nX, 0);
         }
     }
 }
