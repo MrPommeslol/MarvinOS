@@ -2,6 +2,8 @@
 #include <cstddef>
 #include <limine.h>
 
+#include "./console_view/graphic_converter.h"
+
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
 // See specification for further info.
@@ -85,34 +87,6 @@ void hcf() {
 #endif
     }
 }
-
-// Scale an 8-bit colour channel value to the size the framebuffer gives the
-// channel and move it into place within a pixel.
-std::uint32_t fb_channel(std::uint8_t value, std::uint8_t mask_size, std::uint8_t mask_shift) {
-    std::uint64_t max = (std::uint64_t{1} << mask_size) - 1;
-    return static_cast<std::uint32_t>((value * max / 255) << mask_shift);
-}
-
-// Build a pixel from 8-bit red, green and blue values following the channel
-// layout of the framebuffer.
-std::uint32_t fb_pixel(limine_framebuffer *fb, std::uint8_t red, std::uint8_t green, std::uint8_t blue) {
-    return fb_channel(red, fb->red_mask_size, fb->red_mask_shift)
-         | fb_channel(green, fb->green_mask_size, fb->green_mask_shift)
-         | fb_channel(blue, fb->blue_mask_size, fb->blue_mask_shift);
-}
-
-// Print a nice pattern to a framebuffer as an example.
-void fb_pattern(limine_framebuffer *fb) {
-    volatile std::uint32_t *fb_ptr = static_cast<volatile std::uint32_t *>(fb->address);
-    for (std::size_t y = 0; y < fb->height; y++) {
-        for (std::size_t x = 0; x < fb->width; x++) {
-            std::uint8_t nX = x * 255 / fb->width;
-            std::uint8_t nY = y * 255 / fb->height;
-            fb_ptr[y * (fb->pitch / 4) + x] = fb_pixel(fb, nY, nX, 0);
-        }
-    }
-}
-
 }
 
 // The following will be our kernel's entry point.
@@ -123,6 +97,10 @@ extern "C" void kmain() {
     if (LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision) == false) {
         hcf();
     }
+
+    display_text_buffer *text_buffer = new display_text_buffer();
+
+    graphic_converter *converter = new graphic_converter (text_buffer);
 
     // Call global constructors.
     for (void (**ctor)() = __init_array_start; ctor < __init_array_end;) {
@@ -142,12 +120,14 @@ extern "C" void kmain() {
     for (std::uint64_t i = 0; i < framebuffer_request.response->framebuffer_count; i++) {
         limine_framebuffer *framebuffer = framebuffer_request.response->framebuffers[i];
 
+        converter->update_framebuffer(framebuffer);
+
         // Ensure the framebuffer has 32-bit RGB pixels, the only kind we handle.
         if (framebuffer->memory_model != LIMINE_FRAMEBUFFER_RGB || framebuffer->bpp != 32) {
             hcf();
         }
 
-        fb_pattern(framebuffer);
+        converter->paint_graphic();
     }
 
     // We're done, just hang...
