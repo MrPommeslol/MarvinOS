@@ -55,6 +55,33 @@ SECTIONS
     /* Move to the next memory page for .data */
     . = ALIGN(CONSTANT(MAXPAGESIZE));
 
+    /* C++ is a language that allows for global constructors. In order to obtain the */
+    /* address of the ".init_array" section we need to define a symbol for it. */
+    /* The section is writable, so it needs to be mapped to :data. */
+    /* GNU ld before 2.22 and gold before 2.27 cannot sort constructors by priority, */
+    /* so we sort them by name a width at a time, as Clang does not pad priorities. */
+    .init_array : {
+        __init_array_start = .;
+        KEEP(*(SORT(.init_array.?)))
+        KEEP(*(SORT(.init_array.??)))
+        KEEP(*(SORT(.init_array.???)))
+        KEEP(*(SORT(.init_array.????)))
+        KEEP(*(SORT(.init_array.?????)))
+        KEEP(*(.init_array.*))
+        KEEP(*(.init_array))
+        __init_array_end = .;
+    } :data
+
+    /* Clang 10 and older emit constructors for x86 into .ctors instead, which we run */
+    /* backwards: their names count down from 65535 by priority, so sorted by name */
+    /* they run in priority order. */
+    .ctors : {
+        __ctors_start = .;
+        KEEP(*(.ctors))
+        KEEP(*(SORT(.ctors.*)))
+        __ctors_end = .;
+    } :data
+
     .data : {
         *(.data .data.*)
         *(.sdata .sdata.*)
@@ -62,8 +89,7 @@ SECTIONS
 
     /* NOTE: .bss needs to be the last thing mapped to :data, otherwise lots of */
     /* unnecessary zeros will be written to the binary. */
-    /* If you need, for example, .init_array and .fini_array, those should be placed */
-    /* above this. */
+    /* If you need, for example, .fini_array, it should be placed above this. */
     .bss : {
         *(.bss .bss.*)
         *(.sbss .sbss.*)
